@@ -3,8 +3,8 @@ package main
 import (
 	"log"
 
-	"github.com/NikhilCyberk/Microservice-Based-E-commerce-Backend-go/user-service/handlers"
-	"github.com/NikhilCyberk/Microservice-Based-E-commerce-Backend-go/user-service/repository"
+	"github.com/NikhilCyberk/Microservice-Based-E-commerce-Backend-go/services/user-service/handlers"
+	"github.com/NikhilCyberk/Microservice-Based-E-commerce-Backend-go/services/user-service/repository"
 
 	"github.com/NikhilCyberk/Microservice-Based-E-commerce-Backend-go/shared/database"
 	"github.com/NikhilCyberk/Microservice-Based-E-commerce-Backend-go/shared/models"
