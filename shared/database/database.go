@@ -25,7 +25,7 @@ func NewDBConfig() *DBConfig {
 		Host:     getEnv("DB_HOST", "localhost"),
 		Port:     getEnv("DB_PORT", "5432"),
 		User:     getEnv("DB_USER", "postgres"),
-		Password: getEnv("DB_PASSWORD", "password"),
+		Password: getEnv("DB_PASSWORD", "123"),
 		DBName:   getEnv("DB_NAME", "ecommerce"),
 		SSLMode:  getEnv("DB_SSLMODE", "disable"),
 	}
