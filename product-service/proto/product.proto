@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package product;
+
+option go_package = "product-service/proto";
+
+service ProductService {
+  rpc CreateProduct(CreateProductRequest) returns (ProductResponse);
+  rpc GetProduct(GetProductRequest) returns (ProductResponse);
+  rpc ListProducts(ListProductsRequest) returns (ListProductsResponse);
+  rpc UpdateInventory(UpdateInventoryRequest) returns (ProductResponse);
+}
+
+message CreateProductRequest {
+  string name = 1;
+  string description = 2;
+  double price = 3;
+  int32 stock = 4;
+}
+
+message GetProductRequest {
+  string product_id = 1;
+}
+
+message ListProductsRequest {
+  int32 limit = 1;
+}
+
+message ProductResponse {
+  string product_id = 1;
+  string name = 2;
+  string description = 3;
+  double price = 4;
+  int32 stock = 5;
+}
+
+message ListProductsResponse {
+  repeated ProductResponse products = 1;
+}
+
+message UpdateInventoryRequest {
+  string product_id = 1;
+  int32 quantity_change = 2;
+}
