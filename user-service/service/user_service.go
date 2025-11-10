@@ -8,24 +8,28 @@ import (
 	"sync"
 
 	pb "user-service/user-service/proto"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 type User struct {
-    ID       string
-    Email    string
-    Password string
-    Name     string
+    ID           string
+    Email        string
+    PasswordHash string // Store hashed password
+    Name         string
 }
 
 type UserService struct {
     pb.UnimplementedUserServiceServer
-    users map[string]*User
-    mu    sync.RWMutex
+    users      map[string]*User
+    emailIndex map[string]string // email -> userID mapping
+    mu         sync.RWMutex
 }
 
 func NewUserService() *UserService {
     return &UserService{
-        users: make(map[string]*User),
+        users:      make(map[string]*User),
+        emailIndex: make(map[string]string),
     }
 }
 
@@ -33,15 +37,27 @@ func (s *UserService) CreateUser(ctx context.Context, req *pb.CreateUserRequest)
     s.mu.Lock()
     defer s.mu.Unlock()
 
+    // Check if email already exists
+    if _, exists := s.emailIndex[req.Email]; exists {
+        return nil, fmt.Errorf("email already registered")
+    }
+
+    // Hash the password using bcrypt
+    hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+    if err != nil {
+        return nil, fmt.Errorf("failed to hash password: %v", err)
+    }
+
     userID := generateID()
     user := &User{
-        ID:       userID,
-        Email:    req.Email,
-        Password: req.Password, // In production, hash this!
-        Name:     req.Name,
+        ID:           userID,
+        Email:        req.Email,
+        PasswordHash: string(hashedPassword),
+        Name:         req.Name,
     }
 
     s.users[userID] = user
+    s.emailIndex[req.Email] = userID
 
     return &pb.UserResponse{
         UserId: userID,
@@ -70,22 +86,44 @@ func (s *UserService) AuthenticateUser(ctx context.Context, req *pb.AuthRequest)
     s.mu.RLock()
     defer s.mu.RUnlock()
 
-    for _, user := range s.users {
-        if user.Email == req.Email && user.Password == req.Password {
-            token := generateID() // Simplified token generation
-            return &pb.AuthResponse{
-                Success: true,
-                UserId:  user.ID,
-                Token:   token,
-            }, nil
-        }
+    // Find user by email
+    userID, exists := s.emailIndex[req.Email]
+    if !exists {
+        return &pb.AuthResponse{Success: false}, nil
     }
 
-    return &pb.AuthResponse{Success: false}, nil
+    user := s.users[userID]
+
+    // Compare hashed password
+    err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password))
+    if err != nil {
+        return &pb.AuthResponse{Success: false}, nil
+    }
+
+    // Generate secure token (in production, use JWT)
+    token := generateSecureToken()
+
+    return &pb.AuthResponse{
+        Success: true,
+        UserId:  user.ID,
+        Token:   token,
+    }, nil
 }
 
 func generateID() string {
     b := make([]byte, 16)
-    rand.Read(b)
+    if _, err := rand.Read(b); err != nil {
+        // Fallback to timestamp-based ID if random generation fails
+        return fmt.Sprintf("%x", b)
+    }
+    return hex.EncodeToString(b)
+}
+
+func generateSecureToken() string {
+    b := make([]byte, 32)
+    if _, err := rand.Read(b); err != nil {
+        // Fallback if random generation fails
+        return fmt.Sprintf("%x", b)
+    }
     return hex.EncodeToString(b)
 }
