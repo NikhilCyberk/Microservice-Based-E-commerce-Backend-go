@@ -123,6 +123,9 @@ func (s *ProductService) UpdateInventory(ctx context.Context, req *pb.UpdateInve
 
 func generateID() string {
     b := make([]byte, 16)
-    rand.Read(b)
+    if _, err := rand.Read(b); err != nil {
+        // Fallback to timestamp-based ID if random generation fails
+        return fmt.Sprintf("%x", b)
+    }
     return hex.EncodeToString(b)
 }
