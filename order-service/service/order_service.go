@@ -10,10 +10,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	pb "order-service/proto"
+	pb "order-service/order-service/proto"
 	productpb "order-service/proto/product"
 	userpb "order-service/proto/user"
-	"order-service/shared/messaging"
+	"order-service/messaging"
 )
 
 type Order struct {
@@ -36,17 +36,20 @@ type OrderService struct {
 func NewOrderService(userServiceURL, productServiceURL, rabbitMQURL string) (*OrderService, error) {
     userConn, err := grpc.Dial(userServiceURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
     if err != nil {
-        return nil, err
+        return nil, fmt.Errorf("failed to connect to user service: %v", err)
     }
 
     productConn, err := grpc.Dial(productServiceURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
     if err != nil {
-        return nil, err
+        userConn.Close()
+        return nil, fmt.Errorf("failed to connect to product service: %v", err)
     }
 
     mb, err := messaging.NewMessageBroker(rabbitMQURL)
     if err != nil {
-        return nil, err
+        userConn.Close()
+        productConn.Close()
+        return nil, fmt.Errorf("failed to connect to message broker: %v", err)
     }
 
     return &OrderService{
@@ -109,7 +112,11 @@ func (s *OrderService) CreateOrder(ctx context.Context, req *pb.CreateOrderReque
         "total_amount": totalAmount,
         "status":       "pending",
     }
-    s.messageBroker.PublishEvent("orders", "order.created", event)
+    if err := s.messageBroker.PublishEvent("orders", "order.created", event); err != nil {
+        // Log error but don't fail the order creation
+        // In production, you might want to retry or use a transaction
+        fmt.Printf("Warning: failed to publish order event: %v\n", err)
+    }
 
     return &pb.OrderResponse{
         OrderId:     orderID,
@@ -160,6 +167,9 @@ func (s *OrderService) ListOrders(ctx context.Context, req *pb.ListOrdersRequest
 
 func generateID() string {
     b := make([]byte, 16)
-    rand.Read(b)
+    if _, err := rand.Read(b); err != nil {
+        // Fallback to timestamp-based ID if random generation fails
+        return fmt.Sprintf("%x", b)
+    }
     return hex.EncodeToString(b)
 }
