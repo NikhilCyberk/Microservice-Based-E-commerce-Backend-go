@@ -5,120 +5,128 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"sync"
 
 	pb "product-service/product-service/proto"
+	"gorm.io/gorm"
 )
 
 type Product struct {
-    ID          string
-    Name        string
-    Description string
-    Price       float64
-    Stock       int32
+	ID          string  `gorm:"primaryKey;type:varchar(255)"`
+	Name        string  `gorm:"not null;type:varchar(255)"`
+	Description string  `gorm:"type:text"`
+	Price       float64 `gorm:"not null;type:decimal(10,2)"`
+	Stock       int32   `gorm:"not null;default:0"`
+	CreatedAt   int64   `gorm:"autoCreateTime"`
+	UpdatedAt   int64   `gorm:"autoUpdateTime"`
 }
 
 type ProductService struct {
-    pb.UnimplementedProductServiceServer
-    products map[string]*Product
-    mu       sync.RWMutex
+	pb.UnimplementedProductServiceServer
+	db *gorm.DB
 }
 
-func NewProductService() *ProductService {
-    return &ProductService{
-        products: make(map[string]*Product),
-    }
+func NewProductService(db *gorm.DB) *ProductService {
+	return &ProductService{
+		db: db,
+	}
 }
 
 func (s *ProductService) CreateProduct(ctx context.Context, req *pb.CreateProductRequest) (*pb.ProductResponse, error) {
-    s.mu.Lock()
-    defer s.mu.Unlock()
+	productID := generateID()
+	product := &Product{
+		ID:          productID,
+		Name:        req.Name,
+		Description: req.Description,
+		Price:       req.Price,
+		Stock:       req.Stock,
+	}
 
-    productID := generateID()
-    product := &Product{
-        ID:          productID,
-        Name:        req.Name,
-        Description: req.Description,
-        Price:       req.Price,
-        Stock:       req.Stock,
-    }
+	if err := s.db.Create(product).Error; err != nil {
+		return nil, fmt.Errorf("failed to create product: %v", err)
+	}
 
-    s.products[productID] = product
-
-    return &pb.ProductResponse{
-        ProductId:   productID,
-        Name:        product.Name,
-        Description: product.Description,
-        Price:       product.Price,
-        Stock:       product.Stock,
-    }, nil
+	return &pb.ProductResponse{
+		ProductId:   productID,
+		Name:        product.Name,
+		Description: product.Description,
+		Price:       product.Price,
+		Stock:       product.Stock,
+	}, nil
 }
 
 func (s *ProductService) GetProduct(ctx context.Context, req *pb.GetProductRequest) (*pb.ProductResponse, error) {
-    s.mu.RLock()
-    defer s.mu.RUnlock()
+	var product Product
+	result := s.db.Where("id = ?", req.ProductId).First(&product)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("product not found")
+		}
+		return nil, fmt.Errorf("database error: %v", result.Error)
+	}
 
-    product, exists := s.products[req.ProductId]
-    if !exists {
-        return nil, fmt.Errorf("product not found")
-    }
-
-    return &pb.ProductResponse{
-        ProductId:   product.ID,
-        Name:        product.Name,
-        Description: product.Description,
-        Price:       product.Price,
-        Stock:       product.Stock,
-    }, nil
+	return &pb.ProductResponse{
+		ProductId:   product.ID,
+		Name:        product.Name,
+		Description: product.Description,
+		Price:       product.Price,
+		Stock:       product.Stock,
+	}, nil
 }
 
 func (s *ProductService) ListProducts(ctx context.Context, req *pb.ListProductsRequest) (*pb.ListProductsResponse, error) {
-    s.mu.RLock()
-    defer s.mu.RUnlock()
+	var dbProducts []Product
+	query := s.db
 
-    var products []*pb.ProductResponse
-    count := int32(0)
+	if req.Limit > 0 {
+		query = query.Limit(int(req.Limit))
+	}
 
-    for _, p := range s.products {
-        if req.Limit > 0 && count >= req.Limit {
-            break
-        }
-        products = append(products, &pb.ProductResponse{
-            ProductId:   p.ID,
-            Name:        p.Name,
-            Description: p.Description,
-            Price:       p.Price,
-            Stock:       p.Stock,
-        })
-        count++
-    }
+	result := query.Find(&dbProducts)
+	if result.Error != nil {
+		return nil, fmt.Errorf("database error: %v", result.Error)
+	}
 
-    return &pb.ListProductsResponse{Products: products}, nil
+	var products []*pb.ProductResponse
+	for _, p := range dbProducts {
+		products = append(products, &pb.ProductResponse{
+			ProductId:   p.ID,
+			Name:        p.Name,
+			Description: p.Description,
+			Price:       p.Price,
+			Stock:       p.Stock,
+		})
+	}
+
+	return &pb.ListProductsResponse{Products: products}, nil
 }
 
 func (s *ProductService) UpdateInventory(ctx context.Context, req *pb.UpdateInventoryRequest) (*pb.ProductResponse, error) {
-    s.mu.Lock()
-    defer s.mu.Unlock()
+	var product Product
+	result := s.db.Where("id = ?", req.ProductId).First(&product)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("product not found")
+		}
+		return nil, fmt.Errorf("database error: %v", result.Error)
+	}
 
-    product, exists := s.products[req.ProductId]
-    if !exists {
-        return nil, fmt.Errorf("product not found")
-    }
+	newStock := product.Stock + req.QuantityChange
+	if newStock < 0 {
+		return nil, fmt.Errorf("insufficient stock")
+	}
 
-    newStock := product.Stock + req.QuantityChange
-    if newStock < 0 {
-        return nil, fmt.Errorf("insufficient stock")
-    }
+	product.Stock = newStock
+	if err := s.db.Save(&product).Error; err != nil {
+		return nil, fmt.Errorf("failed to update inventory: %v", err)
+	}
 
-    product.Stock = newStock
-
-    return &pb.ProductResponse{
-        ProductId:   product.ID,
-        Name:        product.Name,
-        Description: product.Description,
-        Price:       product.Price,
-        Stock:       product.Stock,
-    }, nil
+	return &pb.ProductResponse{
+		ProductId:   product.ID,
+		Name:        product.Name,
+		Description: product.Description,
+		Price:       product.Price,
+		Stock:       product.Stock,
+	}, nil
 }
 
 func generateID() string {
