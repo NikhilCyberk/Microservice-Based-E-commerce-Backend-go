@@ -119,7 +119,7 @@ func (s *OrderService) CreateOrder(ctx context.Context, req *pb.CreateOrderReque
 		"total_amount": totalAmount,
 		"status":       "pending",
 	}
-	if err := s.messageBroker.PublishEvent("orders", "order.created", event); err != nil {
+	if err := s.messageBroker.PublishEvent("order_events", "order.created", event); err != nil {
 		// Log error but don't fail the order creation
 		// In production, you might want to retry or use a transaction
 		fmt.Printf("Warning: failed to publish order event: %v\n", err)
