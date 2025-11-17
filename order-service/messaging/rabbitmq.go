@@ -2,6 +2,7 @@ package messaging
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 
 	"github.com/streadway/amqp"
@@ -22,6 +23,22 @@ func NewMessageBroker(url string) (*MessageBroker, error) {
     if err != nil {
         conn.Close()
         return nil, err
+    }
+
+    // Declare exchange for order events
+    err = ch.ExchangeDeclare(
+        "order_events", // exchange name
+        "topic",        // exchange type
+        true,           // durable
+        false,          // auto-deleted
+        false,          // internal
+        false,          // no-wait
+        nil,            // arguments
+    )
+    if err != nil {
+        ch.Close()
+        conn.Close()
+        return nil, fmt.Errorf("failed to declare exchange: %v", err)
     }
 
     return &MessageBroker{
