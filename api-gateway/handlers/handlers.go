@@ -5,6 +5,7 @@ import (
     "encoding/json"
     "fmt"
     "net/http"
+    "strings"
 
     "google.golang.org/grpc"
     "google.golang.org/grpc/credentials/insecure"
@@ -20,19 +21,47 @@ type Gateway struct {
     orderClient   orderpb.OrderServiceClient
 }
 
+// createGRPCConnection creates a gRPC connection with load balancing support
+// If multiple addresses are provided (comma-separated), it uses round-robin load balancing
+func createGRPCConnection(addresses string) (*grpc.ClientConn, error) {
+    addrs := strings.Split(addresses, ",")
+    for i := range addrs {
+        addrs[i] = strings.TrimSpace(addrs[i])
+    }
+
+    // If multiple addresses, use round-robin load balancing
+    if len(addrs) > 1 {
+        // Format: dns:///address1,address2,address3
+        addressList := strings.Join(addrs, ",")
+        conn, err := grpc.NewClient(
+            fmt.Sprintf("dns:///%s", addressList),
+            grpc.WithTransportCredentials(insecure.NewCredentials()),
+            grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`),
+        )
+        return conn, err
+    }
+
+    // Single address - direct connection
+    conn, err := grpc.NewClient(
+        addrs[0],
+        grpc.WithTransportCredentials(insecure.NewCredentials()),
+    )
+    return conn, err
+}
+
 func NewGateway(userURL, productURL, orderURL string) (*Gateway, error) {
-    userConn, err := grpc.Dial(userURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
+    userConn, err := createGRPCConnection(userURL)
     if err != nil {
         return nil, fmt.Errorf("failed to connect to user service: %v", err)
     }
 
-    productConn, err := grpc.Dial(productURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
+    productConn, err := createGRPCConnection(productURL)
     if err != nil {
         userConn.Close()
         return nil, fmt.Errorf("failed to connect to product service: %v", err)
     }
 
-    orderConn, err := grpc.Dial(orderURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
+    orderConn, err := createGRPCConnection(orderURL)
     if err != nil {
         userConn.Close()
         productConn.Close()
