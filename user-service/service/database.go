@@ -26,7 +26,7 @@ func InitDB() (*gorm.DB, error) {
 
 	dbPassword := os.Getenv("DB_PASSWORD")
 	if dbPassword == "" {
-		dbPassword = "123"
+		dbPassword = "postgres"
 	}
 
 	dbName := os.Getenv("DB_NAME")
