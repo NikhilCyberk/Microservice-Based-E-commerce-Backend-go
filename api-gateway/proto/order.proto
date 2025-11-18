@@ -2,12 +2,13 @@ syntax = "proto3";
 
 package order;
 
-option go_package = "order-service/proto";
+option go_package = "api-gateway/proto";
 
 service OrderService {
   rpc CreateOrder(CreateOrderRequest) returns (OrderResponse);
   rpc GetOrder(GetOrderRequest) returns (OrderResponse);
   rpc ListOrders(ListOrdersRequest) returns (ListOrdersResponse);
+  rpc UpdateOrderStatus(UpdateOrderStatusRequest) returns (OrderResponse);
 }
 
 message CreateOrderRequest {
@@ -38,4 +39,9 @@ message OrderResponse {
 
 message ListOrdersResponse {
   repeated OrderResponse orders = 1;
+}
+
+message UpdateOrderStatusRequest {
+  string order_id = 1;
+  string status = 2; // pending, processing, shipped, delivered, cancelled
 }
