@@ -382,7 +382,7 @@ const file_proto_product_proto_rawDesc = "" +
 	"\n" +
 	"GetProduct\x12\x1a.product.GetProductRequest\x1a\x18.product.ProductResponse\x12K\n" +
 	"\fListProducts\x12\x1c.product.ListProductsRequest\x1a\x1d.product.ListProductsResponse\x12L\n" +
-	"\x0fUpdateInventory\x12\x1f.product.UpdateInventoryRequest\x1a\x18.product.ProductResponseB\x17Z\x15product-service/protob\x06proto3"
+	"\x0fUpdateInventory\x12\x1f.product.UpdateInventoryRequest\x1a\x18.product.ProductResponseB\x13Z\x11api-gateway/protob\x06proto3"
 
 var (
 	file_proto_product_proto_rawDescOnce sync.Once
